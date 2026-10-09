@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   linux:
     runs-on: ubuntu-22.04
@@ -14,10 +18,15 @@ jobs:
     - name: Build the Docker image
       run: docker build linux --tag rust-skia:linux
     - name: Log into GitHub Container Registry
-      run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+      if: github.event_name == 'push'
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
     - name: Tag the image
+      if: github.event_name == 'push'
       run: docker tag rust-skia:linux ghcr.io/${{ github.repository_owner }}/rust-skia-linux:latest
     - name: Publish the Docker image
+      if: github.event_name == 'push'
       run: docker push ghcr.io/${{ github.repository_owner }}/rust-skia-linux:latest
 
   linux-experimental:
@@ -27,10 +36,15 @@ jobs:
       - name: Build the Docker image
         run: docker build linux-experimental --tag rust-skia:linux
       - name: Log into GitHub Container Registry
-        run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
+        if: github.event_name == 'push'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Tag the image
+        if: github.event_name == 'push'
         run: docker tag rust-skia:linux ghcr.io/${{ github.repository_owner }}/rust-skia-linux:experimental
       - name: Publish the Docker image
+        if: github.event_name == 'push'
         run: docker push ghcr.io/${{ github.repository_owner }}/rust-skia-linux:experimental
 
   linux-arm64:
@@ -45,10 +59,15 @@ jobs:
     - name: Build the Docker image
       run: docker build linux-arm64 --tag rust-skia:linux-arm64
     - name: Log into GitHub Container Registry
-      run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
-    - name: Tag the image 
+      if: github.event_name == 'push'
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+    - name: Tag the image
+      if: github.event_name == 'push'
       run: docker tag rust-skia:linux-arm64 ghcr.io/${{ github.repository_owner }}/rust-skia-linux-arm64:latest
     - name: Publish the Docker image
+      if: github.event_name == 'push'
       run: docker push ghcr.io/${{ github.repository_owner }}/rust-skia-linux-arm64:latest
 
   windows:
@@ -58,8 +77,13 @@ jobs:
     - name: Build the Docker image
       run: docker build windows --tag rust-skia:windows
     - name: Log into GitHub Container Registry
-      run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u ${{ github.actor }} --password-stdin
-    - name: Tag the image 
+      if: github.event_name == 'push'
+      env:
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: echo "$env:GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+    - name: Tag the image
+      if: github.event_name == 'push'
       run: docker tag rust-skia:windows ghcr.io/${{ github.repository_owner }}/rust-skia-windows:latest
     - name: Publish the Docker image
+      if: github.event_name == 'push'
       run: docker push ghcr.io/${{ github.repository_owner }}/rust-skia-windows:latest
