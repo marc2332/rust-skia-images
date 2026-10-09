@@ -1,10 +1,5 @@
-# This container was based on ubuntu 18 because we need to link with libstdc++ 6.0.25 because of ABI incompatibilities.
-# <https://github.com/rust-skia/rust-skia/issues/393>
-# libstdc++ versions used by this image:
-# - Current toolchain baseline: libstdc++-10-dev (amd64 and arm64).
-# - clang-16 and clang-20 on focal both depend on libstdc++-9-dev and libstdc++6 (>= 5.2).
-# - Switching this Dockerfile from clang-16 to clang-20 does not change the libstdc++ baseline.
-FROM --platform=linux/amd64 ubuntu:20.04
+# Ubuntu 24.04 provides FreeType 2.13 headers for stable COLRv1 support.
+FROM --platform=linux/amd64 ubuntu:24.04
 LABEL org.opencontainers.image.source=https://github.com/pragmatrix/rust-skia-images
 
 # For github actions we need a newer git version
@@ -12,38 +7,42 @@ RUN apt-get update \
  && apt-get install -y software-properties-common \
  && add-apt-repository ppa:git-core/ppa -y
 
-RUN apt-get install -y wget
+RUN apt-get install -y wget gnupg
 
-## Add llvm package repository for ubuntu 20 (focal))
-RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-RUN add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-20 main"
+# Add the LLVM 20 repository for Ubuntu 24.04.
+RUN wget -O /tmp/llvm-snapshot.gpg.key https://apt.llvm.org/llvm-snapshot.gpg.key \
+ && gpg --dearmor -o /usr/share/keyrings/llvm.gpg /tmp/llvm-snapshot.gpg.key \
+ && rm /tmp/llvm-snapshot.gpg.key \
+ && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # unzip: for installing the Android NDK
 # libgl1 libgl1-mesa-dev mesa-common-dev: for builds that need OpenGL
 # libgles2-mesa-dev for egl support.
-# clang-20 / g++-10 is used on focal.
+# Clang 20 uses the GCC 13 standard library headers.
 # make is needed for supplemental builds.
 # ninja-build for building Skia
 RUN apt-get update && apt-get install -y \
 	curl \
 	clang-20 \
 	gcc \
-	g++-10 \
+	g++-13 \
 	git \
 	libgl1 \
 	libgl1-mesa-dev \
 	libgles2-mesa-dev \
 	libssl-dev \
 	libfontconfig1-dev \
+	libfreetype-dev \
 	mesa-common-dev \
 	llvm-20-dev \
 	pkg-config \
-	python \
+	python3 \
+	python-is-python3 \
 	unzip \
 	make \
 	libwayland-dev \
 	ninja-build \
-	libstdc++-10-dev
+	libstdc++-13-dev
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -77,17 +76,18 @@ RUN git clone https://github.com/emscripten-core/emsdk.git \
 # Enable multiarch for arm64 to install cross-compilation libraries
 RUN dpkg --add-architecture arm64
 # Configure apt to use ports.ubuntu.com for arm64 packages
-RUN sed -i 's|^deb http://archive.ubuntu.com/ubuntu|deb [arch=amd64] http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
-	&& sed -i 's|^deb http://security.ubuntu.com/ubuntu|deb [arch=amd64] http://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list \
-	&& echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal main restricted universe multiverse" >> /etc/apt/sources.list \
-	&& echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal-updates main restricted universe multiverse" >> /etc/apt/sources.list \
-	&& echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal-backports main restricted universe multiverse" >> /etc/apt/sources.list \
-	&& echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal-security main restricted universe multiverse" >> /etc/apt/sources.list
+RUN sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources \
+	&& printf '%s\n' \
+		"deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse" \
+		"deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse" \
+		"deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse" \
+		"deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse" \
+		> /etc/apt/sources.list.d/ubuntu-arm64.list
 RUN apt-get update && apt-get install -y --no-install-recommends \
-	gcc-10-aarch64-linux-gnu \
-	g++-10-aarch64-linux-gnu \
-	libstdc++-10-dev:arm64 \
-	libgcc-10-dev:arm64
+	gcc-13-aarch64-linux-gnu \
+	g++-13-aarch64-linux-gnu \
+	libstdc++-13-dev:arm64 \
+	libgcc-13-dev:arm64
 
 # Set up alternatives after all packages are installed
 RUN update-alternatives \
@@ -98,8 +98,8 @@ RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-20 100
 
 # Set up alternatives for aarch64 cross-compiler
 RUN update-alternatives \
-	--install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-10 100 \
-	--slave /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-10
+	--install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-13 100 \
+	--slave /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-13
 
 # Add script to test C++ include paths
 COPY test_includes.sh /usr/local/bin/test_includes.sh
