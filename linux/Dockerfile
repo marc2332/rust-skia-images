@@ -35,16 +35,10 @@ RUN apt-get update && apt-get install -y \
 	libgles2-mesa-dev \
 	libssl-dev \
 	libfontconfig1-dev \
-	libpng-dev \
-	libbz2-dev \
-	libbrotli-dev \
-	zlib1g-dev \
-	xz-utils \
 	mesa-common-dev \
 	llvm-20-dev \
 	pkg-config \
-	python3 \
-	python-is-python3 \
+	python \
 	unzip \
 	make \
 	libwayland-dev \
@@ -75,7 +69,7 @@ SHELL ["/bin/bash", "-c"]
 
 ENV EMSCRIPTEN_VER=3.1.59
 
-RUN git clone --depth 1 --branch ${EMSCRIPTEN_VER} https://github.com/emscripten-core/emsdk.git \
+RUN git clone https://github.com/emscripten-core/emsdk.git \
 	&& (cd emsdk && ./emsdk install ${EMSCRIPTEN_VER}) \
 	&& (cd emsdk && ./emsdk activate ${EMSCRIPTEN_VER})
 
@@ -106,31 +100,6 @@ RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-20 100
 RUN update-alternatives \
 	--install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-10 100 \
 	--slave /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-10
-
-ARG FREETYPE_VERSION=2.14.3
-ARG FREETYPE_SHA256=36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f
-
-# Replace distro FreeType after apt installs so Skia's fixed include paths use the new headers.
-RUN curl --fail --location --retry 3 \
-	"https://download-mirror.savannah.gnu.org/releases/freetype/freetype-${FREETYPE_VERSION}.tar.xz" \
-	-o /tmp/freetype.tar.xz \
-	&& echo "${FREETYPE_SHA256}  /tmp/freetype.tar.xz" | sha256sum --check - \
-	&& tar -xf /tmp/freetype.tar.xz -C /tmp \
-	&& cd /tmp/freetype-${FREETYPE_VERSION} \
-	&& ./configure --prefix=/usr --libdir=/usr/lib/x86_64-linux-gnu \
-		--enable-shared --disable-static --with-harfbuzz=no \
-		--with-zlib=yes --with-bzip2=yes --with-png=yes --with-brotli=yes \
-	&& make -j"$(nproc)" \
-	&& make install \
-	&& ldconfig \
-	&& rm -rf /tmp/freetype.tar.xz /tmp/freetype-${FREETYPE_VERSION}
-
-COPY test_freetype.c /tmp/test_freetype.c
-RUN clang /tmp/test_freetype.c -I/usr/include/freetype2 -lfreetype -o /tmp/test_freetype \
-	&& /tmp/test_freetype \
-	&& clang /tmp/test_freetype.c $(pkg-config --cflags --libs freetype2) -o /tmp/test_freetype \
-	&& /tmp/test_freetype \
-	&& rm /tmp/test_freetype /tmp/test_freetype.c
 
 # Add script to test C++ include paths
 COPY test_includes.sh /usr/local/bin/test_includes.sh
