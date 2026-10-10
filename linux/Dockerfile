@@ -69,7 +69,7 @@ SHELL ["/bin/bash", "-c"]
 
 ENV EMSCRIPTEN_VER=3.1.59
 
-RUN git clone https://github.com/emscripten-core/emsdk.git \
+RUN git clone --depth 1 --branch ${EMSCRIPTEN_VER} https://github.com/emscripten-core/emsdk.git \
 	&& (cd emsdk && ./emsdk install ${EMSCRIPTEN_VER}) \
 	&& (cd emsdk && ./emsdk activate ${EMSCRIPTEN_VER})
 
